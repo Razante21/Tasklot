@@ -12,6 +12,7 @@ import {
   assumir,
   chamadosDoSolicitante,
   confirmarSolucao,
+  moverChamado,
   obterChamado,
   reabrir,
   registrarAtendimento,
@@ -108,6 +109,31 @@ describe('Chamados (RF02, RF04, RF06, RF17, RF18)', () => {
     const r = validarAtendimento(c, { status: 'aberto', comentario: 'x', procedimentos: '', materiais: '', orientacoes: '', solucao: '' });
     expect(r.status).toMatch(/só é possível/);
     expect(reabrir('T-0148', 'Um motivo qualquer bem longo')).toMatch(/só vale/);
+  });
+
+  it('arrastar no quadro (moverChamado): Aberto → Em andamento atribui a quem arrastou', () => {
+    entrarComo(ID.rafael);
+    expect(moverChamado('T-0153', 'em_andamento')).toBeNull();
+    const c = obterChamado('T-0153')!;
+    expect(c.status).toBe('em_andamento');
+    expect(c.responsavelId).toBe(ID.rafael);
+  });
+
+  it('arrastar no quadro: Resolvido exige solução, mas qualquer coluna é permitida (como no Trello)', () => {
+    entrarComo(ID.rafael);
+    expect(moverChamado('T-0148', 'resolvido')).toMatch(/solução/i);
+    expect(obterChamado('T-0148')!.status).toBe('em_andamento');
+    expect(moverChamado('T-0148', 'resolvido', 'Cabo trocado')).toBeNull();
+    expect(obterChamado('T-0148')!.status).toBe('resolvido');
+
+    expect(moverChamado('T-0148', 'fechado')).toBeNull();
+    expect(obterChamado('T-0148')!.status).toBe('fechado');
+    expect(moverChamado('T-0148', 'aberto')).toBeNull(); // volta para a fila
+    const c = obterChamado('T-0148')!;
+    expect(c.status).toBe('aberto');
+    expect(c.encerradoEm).toBeNull();
+    expect(moverChamado('T-0137', 'em_andamento')).toBeNull(); // fechado → em andamento
+    expect(obterChamado('T-0137')!.status).toBe('em_andamento');
   });
 
   it('respeita os tamanhos do modelo (comentário VARCHAR(50))', () => {

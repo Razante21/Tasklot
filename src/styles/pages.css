@@ -357,6 +357,13 @@
   font-weight: 600;
 }
 
+/* Arrastar e soltar */
+.tiquete[draggable='true'] { cursor: grab; }
+.tiquete--arrastando { opacity: 0.45; cursor: grabbing; }
+.coluna { border: 2px solid transparent; transition: border-color 0.12s, opacity 0.12s; }
+.coluna--aceita { border-color: var(--linha-forte); border-style: dashed; }
+.coluna--sobre { border-color: var(--marca); border-style: solid; }
+
 .coluna__vazia {
   padding: 16px 8px;
   text-align: center;

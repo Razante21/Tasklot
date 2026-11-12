@@ -283,6 +283,53 @@ export function confirmarSolucao(protocolo: string): void {
   });
 }
 
+/**
+ * Mudança de status feita arrastando o cartão no quadro da fila.
+ * Como no Trello, o cartão pode ir para qualquer coluna (inclusive voltar),
+ * sem seguir TRANSICOES_TI. Tudo fica no histórico e o solicitante é avisado.
+ * Única exigência: para Resolvido é preciso informar a solução.
+ * Retorna uma mensagem de erro, ou null se deu certo.
+ */
+export function moverChamado(protocolo: string, destino: StatusChamado, solucao = ''): string | null {
+  const c = obterChamado(protocolo);
+  if (!c) return 'Chamado não encontrado.';
+  if (c.status === destino) return null;
+  if (destino === 'resolvido' && !solucao) return 'Informe a solução aplicada para marcar como resolvido.';
+  if (solucao.length > LIMITE.solucao_aplicada) return `Use até ${LIMITE.solucao_aplicada} caracteres.`;
+
+  // Resolvido e Em andamento: mesmo caminho do formulário de atendimento
+  // (quem ainda não tem responsável passa a ser o responsável).
+  if (destino === 'resolvido' || destino === 'em_andamento') {
+    registrarAtendimento(protocolo, { status: destino, comentario: '', procedimentos: '', materiais: '', orientacoes: '', solucao });
+    return null;
+  }
+
+  // Aberto (voltar para a fila) e Fechado: só registram a mudança.
+  const autor = exigirUsuario();
+  transacao(() => {
+    const linha = linhaDo(protocolo);
+    const reabrindo = destino === 'aberto' && encerrado(c);
+    const texto =
+      destino === 'fechado'
+        ? `Chamado fechado por ${autor.nome}.`
+        : reabrindo
+          ? `Chamado reaberto por ${autor.nome}.`
+          : `Chamado devolvido para Aberto por ${autor.nome}.`;
+    const hist = registrarEvento(tabelas(), complementos(), {
+      idChamado: linha.id_chamado,
+      tipo: reabrindo ? 'reabertura' : 'status',
+      idAutor: autor.id,
+      data: agora(),
+      texto,
+      status: destino,
+    });
+    if (c.solicitanteId !== autor.id) {
+      notificar(c.solicitanteId, linha.id_chamado, `${protocolo} · Status mudou para ${STATUS_LABEL[destino]}.`, destino === 'fechado' ? 'encerramento' : 'status', hist);
+    }
+  });
+  return null;
+}
+
 /** RF18 · UC18 FS001/FS002: só encerrados, com motivo; volta para a fila. */
 export function reabrir(protocolo: string, motivo: string): string | null {
   const autor = exigirUsuario();

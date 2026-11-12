@@ -6,21 +6,26 @@
 import { html, qs, qsa, type Seguro } from '@/core/dom';
 import { normalizar } from '@/core/format';
 import { PRIORIDADE_LABEL, STATUS_LABEL, STATUS_ORDEM } from '@/core/labels';
-import type { Chamado, Prioridade } from '@/core/types';
+import type { Chamado, Prioridade, StatusChamado } from '@/core/types';
 import type { Contexto, Pagina } from '@/app/router';
 import { icone } from '@/components/icones';
 import { cabecalho, vazio } from '@/components/selos';
-import { listarChamados } from '@/services/chamados.service';
+import { abrirModal, avisar } from '@/components/feedback';
+import { campoTexto } from '@/components/campos';
+import { LIMITE } from '@/data/limites';
+import { navegar } from '@/app/router';
+import { pode } from '@/services/permissoes.service';
+import { listarChamados, moverChamado, obterChamado } from '@/services/chamados.service';
 import { listarEquipamentos, obterEquipamento } from '@/services/equipamentos.service';
 import { listarLocais, nomeLocal } from '@/services/locais.service';
 import { listarUsuarios, nomeUsuario } from '@/services/usuarios.service';
 
 const PESO: Record<Prioridade, number> = { alta: 0, media: 1, baixa: 2 };
 
-function tiquete(c: Chamado): Seguro {
+function tiquete(c: Chamado, arrastavel: boolean): Seguro {
   const eq = obterEquipamento(c.equipamentoId);
   return html`
-    <a class="tiquete" href="#/chamados/${c.protocolo}">
+    <a class="tiquete" href="#/chamados/${c.protocolo}" data-protocolo="${c.protocolo}" ${arrastavel ? html`draggable="true"` : ''}>
       <span class="tiquete__topo"><span>${c.protocolo}</span><span class="${c.prioridade === 'alta' ? 'prioridade--alta' : ''}">${PRIORIDADE_LABEL[c.prioridade]}</span></span>
       <strong>${c.titulo}</strong>
       <small>${nomeLocal(c.localId)} · ${eq ? eq.tipo : 'Sem aparelho'}</small>
@@ -35,6 +40,84 @@ function seletor(nome: string, rotulo: string, valor: string, opcoes: [string | 
     <select class="chip" id="f-${nome}" name="${nome}">
       ${opcoes.map(([v, t]) => html`<option value="${v}" ${String(v) === valor ? html`selected` : ''}>${rotulo}: ${t}</option>`)}
     </select>`;
+}
+
+/** Atualiza a fila na tela depois de uma mudança de status. */
+const recarregar = () => navegar(location.hash.replace(/^#/, '') || '/fila');
+
+/**
+ * Arrastar e soltar (como no Trello): soltar o cartão em qualquer coluna
+ * muda o status. "Resolvido" abre uma janela pedindo a solução (obrigatória).
+ */
+function ligarArrastar(raiz: HTMLElement): void {
+  let arrastando: { protocolo: string; origem: StatusChamado } | null = null;
+  const colunas = qsa(raiz, '.coluna');
+  const limpar = () => colunas.forEach((c) => c.classList.remove('coluna--aceita', 'coluna--sobre'));
+
+  qsa(raiz, '.tiquete[draggable="true"]').forEach((t) => {
+    t.addEventListener('dragstart', (e) => {
+      const protocolo = t.dataset.protocolo!;
+      const origem = t.closest<HTMLElement>('.coluna')!.dataset.status as StatusChamado;
+      arrastando = { protocolo, origem };
+      e.dataTransfer?.setData('text/plain', protocolo);
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+      t.classList.add('tiquete--arrastando');
+      colunas.forEach((c) => {
+        const s = c.dataset.status as StatusChamado;
+        if (s !== origem) c.classList.add('coluna--aceita');
+      });
+    });
+    t.addEventListener('dragend', () => {
+      arrastando = null;
+      t.classList.remove('tiquete--arrastando');
+      limpar();
+    });
+  });
+
+  colunas.forEach((col) => {
+    const destino = col.dataset.status as StatusChamado;
+    col.addEventListener('dragover', (e) => {
+      if (!arrastando) return;
+      e.preventDefault(); // sem isso o navegador não deixa soltar
+      col.classList.add('coluna--sobre');
+    });
+    col.addEventListener('dragleave', (e) => {
+      if (!col.contains(e.relatedTarget as Node | null)) col.classList.remove('coluna--sobre');
+    });
+    col.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const item = arrastando;
+      arrastando = null;
+      limpar();
+      if (!item || item.origem === destino) return;
+      if (destino === 'resolvido') pedirSolucao(item.protocolo);
+      else mover(item.protocolo, destino);
+    });
+  });
+}
+
+function mover(protocolo: string, destino: StatusChamado, solucao = ''): string | null {
+  const erro = moverChamado(protocolo, destino, solucao);
+  if (!erro) {
+    avisar(`${protocolo} movido para ${STATUS_LABEL[destino]}.`);
+    recarregar();
+  }
+  return erro;
+}
+
+function pedirSolucao(protocolo: string): void {
+  const c = obterChamado(protocolo);
+  abrirModal({
+    titulo: `Resolver ${protocolo}`,
+    corpo: html`
+      <p class="mudo" style="margin-bottom:12px">${c?.titulo ?? ''}</p>
+      ${campoTexto({ nome: 'solucao', rotulo: 'Solução aplicada', limite: LIMITE.solucao_aplicada, placeholder: 'Obrigatória para marcar como resolvido' })}`,
+    confirmar: 'Marcar como resolvido',
+    aoConfirmar: (form) => {
+      const solucao = (form.elements.namedItem('solucao') as HTMLInputElement).value.trim();
+      return mover(protocolo, 'resolvido', solucao);
+    },
+  });
 }
 
 export function paginaFila({ usuario, query }: Contexto): Pagina {
@@ -66,6 +149,7 @@ export function paginaFila({ usuario, query }: Contexto): Pagina {
   const usuarios = listarUsuarios().filter((u) => solicitantes.includes(u.id));
   const comChamado = new Set(todos.map((c) => c.equipamentoId).filter(Boolean));
   const aparelhos = listarEquipamentos().filter((e) => comChamado.has(e.id));
+  const podeArrastar = pode('registrar_atendimento', usuario);
   const temFiltro = f.q || f.prioridade || f.solicitante || f.equipamento || f.responsavel || f.local;
 
   const conteudo = html`
@@ -96,9 +180,9 @@ export function paginaFila({ usuario, query }: Contexto): Pagina {
               ${STATUS_ORDEM.map((s) => {
                 const daColuna = lista.filter((c) => c.status === s);
                 return html`
-                  <section class="coluna coluna--${s}" aria-label="${STATUS_LABEL[s]}">
+                  <section class="coluna coluna--${s}" data-status="${s}" aria-label="${STATUS_LABEL[s]}">
                     <h2><span>${STATUS_LABEL[s]}</span><span>${daColuna.length}</span></h2>
-                    ${daColuna.length ? daColuna.map(tiquete) : html`<p class="coluna__vazia">Nenhum chamado</p>`}
+                    ${daColuna.length ? daColuna.map((c) => tiquete(c, podeArrastar)) : html`<p class="coluna__vazia">Nenhum chamado</p>`}
                   </section>`;
               })}
             </div>`
@@ -123,6 +207,7 @@ export function paginaFila({ usuario, query }: Contexto): Pagina {
         e.preventDefault();
         aplicar();
       });
+      if (podeArrastar) ligarArrastar(raiz);
     },
   };
 }
