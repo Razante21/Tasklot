@@ -1,0 +1,72 @@
+/*
+ * Tokens de design tirados do Figma do Tasklot.
+ * Mudar uma cor ou fonte aqui muda o sistema inteiro.
+ */
+:root {
+  /* Fontes (decisão do grupo): nome do sistema em Syncopate,
+     títulos em Orbitron Black, texto em Inter */
+  --fonte-marca: 'Syncopate', 'Orbitron', sans-serif;
+  --fonte-titulo: 'Orbitron', 'Inter', system-ui, sans-serif;
+  --fonte-texto: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Superfícies */
+  --fundo: #f4f2ec;
+  --superficie: #ffffff;
+  --superficie-2: #faf9f6;
+  --escuro: #1c1c1a;
+  --escuro-2: #2e2e2b;
+
+  /* Texto */
+  --texto: #1c1c1a;
+  --texto-2: #5c5a54;
+  --texto-3: #77756f;
+  --texto-claro: #ffffff;
+
+  /* Linhas */
+  --linha: #e3e0d8;
+  --linha-2: #e6e3da;
+  --linha-forte: #1c1c1a;
+
+  /* Marca (framboesa do axolote) */
+  --marca: #c8355f;
+  --marca-escura: #a92a4f;
+  --marca-suave: #fddde3;
+
+  /* Status dos chamados */
+  --aberto-fundo: #dce8fb;
+  --aberto-texto: #1b3f8b;
+  --andamento-fundo: #fce8be;
+  --andamento-texto: #6b4a00;
+  --resolvido-fundo: #d4eddf;
+  --resolvido-texto: #0b5b3a;
+  --fechado-fundo: #e6e3da;
+  --fechado-texto: #4a4842;
+
+  /* Colunas do quadro da fila */
+  --coluna-aberto: #ebeef3;
+  --coluna-andamento: #f9edd8;
+  --coluna-resolvido: #e8efe6;
+  --coluna-fechado: #ece9e2;
+
+  --erro: #b42318;
+  --erro-fundo: #fee4e2;
+  --aviso-fundo: #fce8be;
+
+  /* Forma */
+  --raio-s: 6px;
+  --raio: 12px;
+  --raio-l: 18px;
+  --raio-pilula: 999px;
+
+  /* Espaço */
+  --esp-1: 4px;
+  --esp-2: 8px;
+  --esp-3: 12px;
+  --esp-4: 16px;
+  --esp-5: 24px;
+  --esp-6: 32px;
+
+  --sidebar: 248px;
+  --sombra: 0 12px 32px rgba(28, 28, 26, 0.12);
+  --foco: 0 0 0 3px rgba(200, 53, 95, 0.28);
+}
