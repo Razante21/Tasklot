@@ -9,7 +9,57 @@ import { tabelas, transacao } from '@/data/db';
 import { paraUsuario } from './usuarios.service';
 
 const CHAVE_SESSAO = 'tasklot:sessao';
-let sessaoMemoria: number | null = null;
+/** A sessão vale por um turno de trabalho; depois disso pede login de novo (computadores compartilhados). */
+export const DURACAO_SESSAO_MS = 8 * 60 * 60 * 1000;
+
+interface Sessao {
+  id: number;
+  expiraEm: number;
+}
+
+let sessaoMemoria: Sessao | null = null;
+
+function guardarSessao(id: number): void {
+  const sessao: Sessao = { id, expiraEm: Date.now() + DURACAO_SESSAO_MS };
+  sessaoMemoria = null;
+  try {
+    localStorage.setItem(CHAVE_SESSAO, JSON.stringify(sessao));
+  } catch {
+    sessaoMemoria = sessao; // sem storage: fica só em memória
+  }
+}
+
+function sessaoValida(dados: unknown): dados is Sessao {
+  return (
+    typeof dados === 'object' && dados !== null &&
+    Number.isInteger((dados as Sessao).id) && typeof (dados as Sessao).expiraEm === 'number'
+  );
+}
+
+/** Lê a sessão salva; qualquer formato estranho ou vencido conta como "sem sessão". */
+function lerSessao(): Sessao | null {
+  // sessaoMemoria só existe quando o localStorage falhou ao gravar.
+  let sessao: Sessao | null = sessaoMemoria;
+  let salvo: string | null = null;
+  try {
+    salvo = localStorage.getItem(CHAVE_SESSAO);
+  } catch {
+    /* sem storage */
+  }
+  if (salvo) {
+    try {
+      const dados: unknown = JSON.parse(salvo);
+      sessao = sessaoValida(dados) ? dados : null;
+    } catch {
+      sessao = null;
+    }
+  }
+  if (!sessao || sessao.expiraEm <= Date.now()) {
+    if (sessao || salvo) sair(); // apaga sessão vencida ou de formato antigo
+    return null;
+  }
+  return sessao;
+}
 
 export interface ResultadoLogin {
   ok: boolean;
@@ -44,24 +94,14 @@ export function entrar(email: string, senha: string): ResultadoLogin {
   transacao(() => {
     cred.ultimo_login = new Date().toISOString();
   });
-  try {
-    localStorage.setItem(CHAVE_SESSAO, String(usuario.id_usuario));
-  } catch {
-    sessaoMemoria = usuario.id_usuario;
-  }
+  guardarSessao(usuario.id_usuario);
   return { ok: true, erros: {} };
 }
 
 export function usuarioLogado(): Usuario | null {
-  let id: number | null = sessaoMemoria;
-  try {
-    const salvo = localStorage.getItem(CHAVE_SESSAO);
-    if (salvo) id = Number(salvo);
-  } catch {
-    /* sem storage */
-  }
-  if (!id) return null;
-  const linha = tabelas().USUARIO.find((u) => u.id_usuario === id);
+  const sessao = lerSessao();
+  if (!sessao) return null;
+  const linha = tabelas().USUARIO.find((u) => u.id_usuario === sessao.id);
   return linha && linha.situacao === 'ativo' ? paraUsuario(linha) : null;
 }
 
@@ -76,10 +116,5 @@ export function sair(): void {
 
 /** Só para os testes automatizados. */
 export function _entrarComo(id: number): void {
-  sessaoMemoria = id;
-  try {
-    localStorage.setItem(CHAVE_SESSAO, String(id));
-  } catch {
-    /* sem storage */
-  }
+  guardarSessao(id);
 }

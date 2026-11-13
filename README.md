@@ -9,12 +9,12 @@ banco de dados** entregue (21 tabelas, mesmos nomes de tabelas e campos).
 
 ## Como rodar
 
-Precisa do Node.js 18 ou mais novo.
+Precisa do Node.js 20.19 ou mais novo.
 
 ```bash
 npm install
 npm run dev       # abre em http://localhost:5173
-npm test          # 18 testes automáticos das regras (RNF16)
+npm test          # testes automáticos das regras (RNF16)
 npm run build     # confere os tipos e gera a pasta dist/
 npm run preview   # serve a versão de produção (dist/)
 ```
@@ -84,7 +84,7 @@ e só os serviços (via `data/`) mexem nas tabelas. Para ligar o MySQL real, tro
 | RNF10 Auditoria | `services/auditoria.service.ts`, tela Auditoria |
 | RNF11 Backup e recuperação | Meu perfil → Cópia de segurança |
 | RNF15 Confiabilidade | `transacao()` em `data/db.ts` desfaz tudo se algo falhar |
-| RNF16 Testabilidade | `tests/servicos.test.ts` |
+| RNF16 Testabilidade | `tests/servicos.test.ts`, `tests/seguranca.test.ts` |
 
 ## Publicar na Vercel
 
@@ -102,3 +102,7 @@ e só os serviços (via `data/`) mexem nas tabelas. Para ligar o MySQL real, tro
 - O que a documentação pede e o modelo não tem coluna (responsável do chamado, autor
   de cada evento, aparelho de cada chamado, auditoria) está em `complementos`;
   veja `docs/MAPEAMENTO-BD.md`.
+- A sessão vale por 8 horas; depois disso o sistema pede login de novo (pensado
+  para os computadores compartilhados do laboratório).
+- Ao restaurar uma cópia de segurança, o arquivo é conferido tabela por tabela;
+  arquivos danificados ou alterados são recusados sem mudar nada.
