@@ -1,7 +1,7 @@
 /** Telas 37 e 38 · Indicadores (Equipe de TI e Gestão). */
 import { html, type Seguro } from '@/core/dom';
-import { baixarCSV } from '@/core/csv';
-import { duracao, plural } from '@/core/format';
+import { baixarCSV, carimboArquivo, decimalBR, type LinhaCSV } from '@/core/csv';
+import { dataHoraCompleta, duracao, plural } from '@/core/format';
 import { STATUS_LABEL, STATUS_ORDEM } from '@/core/labels';
 import type { Contexto, Pagina } from '@/app/router';
 import { icone } from '@/components/icones';
@@ -33,6 +33,11 @@ function barras(itens: { rotulo: string; valor: number }[], cor: '' | 'marca' | 
     </div>`;
 }
 
+/** Bloco vazio no CSV ganha uma linha explicando, em vez de ficar em branco. */
+function ouAviso(linhas: LinhaCSV[], aviso: string): LinhaCSV[] {
+  return linhas.length ? linhas : [[aviso]];
+}
+
 export function paginaIndicadores({ query }: Contexto): Pagina {
   const dias = PERIODOS.some(([v]) => v === query.get('dias')) ? query.get('dias')! : '30';
   const ind = calcularIndicadores(Number(dias));
@@ -59,12 +64,12 @@ export function paginaIndicadores({ query }: Contexto): Pagina {
 
       <div class="lado-a-lado">
         <section class="card">
-          <h2>Chamados por status</h2>
+          <h2>Chamados do período por status atual</h2>
           ${barras(STATUS_ORDEM.map((s) => ({ rotulo: STATUS_LABEL[s], valor: ind.porStatus[s] })), '')}
         </section>
         <section class="card">
           <h2>Locais com mais ocorrências</h2>
-          ${barras(ind.porLocal.map((l) => ({ rotulo: l.nome, valor: l.total })), 'marca')}
+          ${barras(ind.porLocal.slice(0, 4).map((l) => ({ rotulo: l.nome, valor: l.total })), 'marca')}
         </section>
       </div>
 
@@ -72,7 +77,7 @@ export function paginaIndicadores({ query }: Contexto): Pagina {
         <section class="card">
           <h2>Equipamentos com falhas recorrentes</h2>
           ${ind.recorrentes.length
-            ? ind.recorrentes.map((r) => {
+            ? ind.recorrentes.slice(0, 3).map((r) => {
                 const e = obterEquipamento(r.equipamentoId);
                 return html`
                   <div class="recorrente">
@@ -97,18 +102,42 @@ export function paginaIndicadores({ query }: Contexto): Pagina {
     html: conteudo,
     montar(raiz) {
       raiz.querySelector('[data-exportar]')?.addEventListener('click', () => {
-        baixarCSV(`tasklot-indicadores-${dias}dias.csv`, [
-          ['Indicador', 'Valor'],
-          ['Período (dias)', dias],
-          ['Abertos agora', ind.abertos],
-          ['Sem responsável', ind.semResponsavel],
+        const periodo = PERIODOS.find(([v]) => v === dias)![1];
+        const linhas: LinhaCSV[] = [
+          ['Relatório de indicadores do suporte de TI'],
+          ['Gerado em', dataHoraCompleta(new Date().toISOString())],
+          ['Período', dias === '180' ? `${periodo} (últimos ${dias} dias)` : `Últimos ${periodo}`],
+          [],
+          ['Situação atual (todos os chamados)', 'Quantidade'],
+          ['Abertos', ind.abertos],
+          ['Abertos sem responsável', ind.semResponsavel],
           ['Em andamento', ind.emAndamento],
-          ['Resolvidos no período', ind.resolvidosPeriodo],
-          ['Tempo médio de solução (h)', ind.tempoMedioHoras.toFixed(1)],
-          ...STATUS_ORDEM.map((s): [string, number] => [`Status: ${STATUS_LABEL[s]}`, ind.porStatus[s]]),
-          ...ind.porLocal.map((l): [string, number] => [`Local: ${l.nome}`, l.total]),
-          ...ind.porTipo.map((c): [string, number] => [`Tipo de aparelho: ${c.nome}`, c.total]),
-        ]);
+          ['Em andamento parados há mais de 3 dias', ind.parados],
+          [],
+          ['Resolução no período', 'Valor'],
+          ['Chamados resolvidos no período', ind.resolvidosPeriodo],
+          ['Chamados resolvidos no período anterior', ind.resolvidosAnterior],
+          ['Tempo médio de solução (horas)', ind.resolvidosPeriodo ? decimalBR(ind.tempoMedioHoras) : 'Sem chamados resolvidos'],
+          [],
+          ['Chamados abertos no período, por status atual', 'Quantidade'],
+          ...STATUS_ORDEM.map((s): LinhaCSV => [STATUS_LABEL[s], ind.porStatus[s]]),
+          [],
+          ['Chamados abertos no período, por local', 'Quantidade'],
+          ...ouAviso(ind.porLocal.map((l): LinhaCSV => [l.nome, l.total]), 'Nenhum chamado no período'),
+          [],
+          ['Chamados abertos no período, por tipo de aparelho', 'Quantidade'],
+          ...ouAviso(ind.porTipo.map((c): LinhaCSV => [c.nome, c.total]), 'Nenhum chamado no período'),
+          [],
+          ['Equipamentos com 2 ou mais chamados no período', 'Local', 'Patrimônio', 'Chamados'],
+          ...ouAviso(
+            ind.recorrentes.map((r): LinhaCSV => {
+              const e = obterEquipamento(r.equipamentoId);
+              return e ? [descreverEquipamento(e), nomeLocal(e.localId), e.patrimonio, r.total] : [String(r.equipamentoId), '', '', r.total];
+            }),
+            'Nenhum equipamento',
+          ),
+        ];
+        baixarCSV(`tasklot-indicadores-${dias}dias-${carimboArquivo()}.csv`, linhas);
       });
     },
   };

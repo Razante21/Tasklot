@@ -1,6 +1,6 @@
 /** Tela 36 · Registro de auditoria. */
 import { html, qs, qsa } from '@/core/dom';
-import { baixarCSV } from '@/core/csv';
+import { baixarCSV, carimboArquivo } from '@/core/csv';
 import { dataHoraCompleta, normalizar } from '@/core/format';
 import { ACAO_LABEL } from '@/core/labels';
 import type { AcaoAuditoria } from '@/core/types';
@@ -17,6 +17,12 @@ const COR_ACAO: Record<AcaoAuditoria, string> = {
   exclusao: 'marca',
   permissao: 'em_manutencao',
 };
+
+const PERIODOS: [string, string][] = [
+  ['7', 'Últimos 7 dias'],
+  ['30', 'Últimos 30 dias'],
+  ['365', 'Último ano'],
+];
 
 export function paginaAuditoria({ query }: Contexto): Pagina {
   const f = { q: query.get('q') ?? '', dias: query.get('dias') ?? '30', acao: query.get('acao') ?? '', resp: query.get('resp') ?? '' };
@@ -38,7 +44,7 @@ export function paginaAuditoria({ query }: Contexto): Pagina {
           <input id="q" name="q" value="${f.q}" placeholder="Buscar por registro ou responsável" />
         </div>
         <select class="chip" name="dias" aria-label="Período">
-          ${[['7', 'Últimos 7 dias'], ['30', 'Últimos 30 dias'], ['365', 'Último ano']].map(([v, t]) => html`<option value="${v}" ${v === f.dias ? html`selected` : ''}>Período: ${t}</option>`)}
+          ${PERIODOS.map(([v, t]) => html`<option value="${v}" ${v === f.dias ? html`selected` : ''}>Período: ${t}</option>`)}
         </select>
         <select class="chip" name="acao" aria-label="Ação">
           <option value="">Ação: Todas</option>
@@ -91,7 +97,15 @@ export function paginaAuditoria({ query }: Contexto): Pagina {
       });
       qsa(form, 'select').forEach((s) => s.addEventListener('change', aplicar));
       qs(raiz, '[data-exportar]').addEventListener('click', () =>
-        baixarCSV('tasklot-auditoria.csv', [
+        baixarCSV(`tasklot-auditoria-${carimboArquivo()}.csv`, [
+          ['Registro de auditoria'],
+          ['Gerado em', dataHoraCompleta(new Date().toISOString())],
+          ['Período', PERIODOS.find(([v]) => v === f.dias)?.[1] ?? `Últimos ${f.dias} dias`],
+          ['Ação', f.acao ? ACAO_LABEL[f.acao as AcaoAuditoria] : 'Todas'],
+          ['Responsável', f.resp ? nomeUsuario(Number(f.resp)) : 'Todos'],
+          ['Busca', f.q || '(nenhuma)'],
+          ['Registros', lista.length],
+          [],
           ['Data e hora', 'Responsável', 'Ação', 'Registro', 'Detalhe'],
           ...lista.map((a) => [dataHoraCompleta(a.data), nomeUsuario(a.responsavelId), ACAO_LABEL[a.acao], a.registro, a.detalhe]),
         ]),
