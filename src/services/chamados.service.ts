@@ -360,9 +360,12 @@ export interface Indicadores {
   resolvidosPeriodo: number;
   resolvidosAnterior: number;
   tempoMedioHoras: number;
+  /** Status ATUAL dos chamados abertos no período. */
   porStatus: Record<StatusChamado, number>;
+  /** Todos os locais com chamados no período, do maior para o menor. */
   porLocal: { nome: string; total: number }[];
   porTipo: { nome: string; total: number }[];
+  /** Todos os equipamentos com 2 ou mais chamados no período. */
   recorrentes: { equipamentoId: number; total: number }[];
 }
 
@@ -404,11 +407,10 @@ export function calcularIndicadores(dias: number): Indicadores {
     resolvidosAnterior: resolvidosEntre(inicioAnterior, inicio).length,
     tempoMedioHoras: tempos.length ? tempos.reduce((a, b) => a + b, 0) / tempos.length : 0,
     porStatus,
-    porLocal: contar(doPeriodo, (c) => obterLocal(c.localId)?.nome ?? null).slice(0, 4).map(([nome, total]) => ({ nome: String(nome), total })),
+    porLocal: contar(doPeriodo, (c) => obterLocal(c.localId)?.nome ?? null).map(([nome, total]) => ({ nome: String(nome), total })),
     porTipo: contar(doPeriodo, (c) => obterEquipamento(c.equipamentoId)?.tipo ?? 'Sem aparelho').map(([nome, total]) => ({ nome: String(nome), total })),
     recorrentes: contar(doPeriodo, (c) => c.equipamentoId)
       .filter(([, total]) => total >= 2)
-      .slice(0, 3)
       .map(([id, total]) => ({ equipamentoId: Number(id), total })),
   };
 }

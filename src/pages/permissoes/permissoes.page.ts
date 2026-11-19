@@ -44,9 +44,9 @@ export function paginaPermissoes(_: Contexto): Pagina {
                         <td>${i.label}${i.dica ? html`<span class="sub" style="font-size:11.5px;color:var(--texto-3)">${i.dica}</span>` : ''}</td>
                         ${perfis.map(
                           (p) => html`
-                            <td>
-                              <input type="checkbox" data-perfil="${p.id}" data-perm="${i.chave}" aria-label="${i.label} · ${p.nome}"
-                                ${m[p.id][i.chave] ? html`checked` : ''} ${eFixa(p.id, i.chave) ? html`disabled` : ''} />
+                            <td data-rotulo="${p.nome}">
+                              <label data-rotulo="${p.nome}"><input type="checkbox" data-perfil="${p.id}" data-perm="${i.chave}" aria-label="${i.label} · ${p.nome}"
+                                ${m[p.id][i.chave] ? html`checked` : ''} ${eFixa(p.id, i.chave) ? html`disabled` : ''} /></label>
                             </td>`,
                         )}
                       </tr>`,
